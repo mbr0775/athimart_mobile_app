@@ -2,13 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_strings.dart';
-import '../../../../shared/widgets/custom_text_field.dart';
-import '../../../../shared/widgets/custom_button.dart';
+
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
+import '../../../home/presentation/theme/home_tokens.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -17,328 +15,394 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen>
-    with SingleTickerProviderStateMixin {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
 
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      duration: const Duration(milliseconds: 700),
-      vsync: this,
-    );
-    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
-    _animController.forward();
-  }
+  final _nameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
+
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
-    _animController.dispose();
-    _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     super.dispose();
   }
 
   void _register() {
-    if (_formKey.currentState?.validate() ?? false) {
-      context.read<AuthBloc>().add(AuthRegisterRequested(
-        email: _emailController.text,
-        password: _passwordController.text,
-        fullName: _nameController.text,
-        phone: _phoneController.text,
-      ));
-    }
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    context.read<AuthBloc>().add(
+      AuthRegisterRequested(
+        fullName: _nameCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        password: _passwordCtrl.text,
+      ),
+    );
+  }
+
+  void _showSnack(String message, {bool error = false}) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? HomeTokens.sale : HomeTokens.text,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<AuthBloc, AuthState>(
-      listener: (context, state) {
-        if (state is AuthSuccess) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(children: [
-                const Icon(Icons.check_circle_outline_rounded,
-                    color: AppColors.accentGreen, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text(state.message)),
-              ]),
-              backgroundColor: AppColors.card,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted) context.go('/auth/login');
-          });
-        } else if (state is AuthError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(children: [
-                const Icon(Icons.error_outline_rounded,
-                    color: AppColors.accentRed, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text(state.message)),
-              ]),
-              backgroundColor: AppColors.card,
-            ),
-          );
-        }
-      },
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border),
+    return Scaffold(
+      backgroundColor: HomeTokens.linen,
+      body: BlocListener<AuthBloc, AuthState>(
+        listener: (context, state) {
+          if (state is AuthSuccess) {
+            _showSnack(state.message);
+            context.go('/auth/login');
+          }
+
+          if (state is AuthError) {
+            _showSnack(state.message, error: true);
+          }
+        },
+        child: SafeArea(
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFFF7F2EC),
+                  Color(0xFFF2EDE7),
+                  Color(0xFFEEE8E1),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              child: const Icon(Icons.arrow_back_rounded,
-                  color: AppColors.textPrimary, size: 18),
             ),
-            onPressed: () => context.pop(),
-          ),
-        ),
-        body: FadeTransition(
-          opacity: _fadeAnim,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 4),
-
-                  // ── Logo + Header ──────────────────────────────────────
-                  Center(
-                    child: Column(children: [
-                      // Real logo
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withOpacity(0.45),
-                              blurRadius: 22,
-                              spreadRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: Image.asset(
-                            'assets/icons/athimartlogo.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient,
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: const Center(
-                                child: Text('A',
-                                  style: TextStyle(
-                                    fontFamily: 'PlayfairDisplay',
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black,
-                                  )),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ]),
-                  ),
-
-                  // Title
-                  const Text(
-                    AppStrings.createAccount,
-                    style: TextStyle(
-                      fontFamily: 'PlayfairDisplay',
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    AppStrings.createAccountSubtitle,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // Full Name
-                  CustomTextField(
-                    label: AppStrings.fullName,
-                    hint: 'John Doe',
-                    controller: _nameController,
-                    prefixIcon: Icons.person_outline_rounded,
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return AppStrings.nameRequired;
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Email
-                  CustomTextField(
-                    label: AppStrings.email,
-                    hint: 'you@example.com',
-                    controller: _emailController,
-                    prefixIcon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (val) {
-                      if (val == null || val.isEmpty) {
-                        return AppStrings.emailRequired;
-                      }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                          .hasMatch(val)) {
-                        return AppStrings.emailInvalid;
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Phone
-                  CustomTextField(
-                    label: AppStrings.phoneNumber,
-                    hint: '+974 7406 2481',
-                    controller: _phoneController,
-                    prefixIcon: Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return AppStrings.phoneRequired;
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Password
-                  CustomTextField(
-                    label: AppStrings.password,
-                    hint: 'Min 8 characters',
-                    controller: _passwordController,
-                    prefixIcon: Icons.lock_outline_rounded,
-                    isPassword: true,
-                    validator: (val) {
-                      if (val == null || val.isEmpty) return AppStrings.passwordRequired;
-                      if (val.length < 8) return AppStrings.passwordTooShort;
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Confirm Password
-                  CustomTextField(
-                    label: AppStrings.confirmPassword,
-                    hint: 'Re-enter password',
-                    controller: _confirmPasswordController,
-                    prefixIcon: Icons.lock_outline_rounded,
-                    isPassword: true,
-                    validator: (val) {
-                      if (val == null || val.isEmpty) return AppStrings.passwordRequired;
-                      if (val != _passwordController.text) {
-                        return AppStrings.passwordsDoNotMatch;
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Terms
-                  Row(children: [
-                    const Icon(Icons.info_outline_rounded,
-                        size: 14, color: AppColors.textHint),
-                    const SizedBox(width: 6),
-                    const Expanded(
-                      child: Text(
-                        'By creating an account, you agree to Athimart\'s Terms & Privacy Policy.',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 11,
-                          color: AppColors.textHint,
-                          height: 1.5,
-                        ),
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 18,
+                  right: 20,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => context.go('/auth/login'),
+                    child: const SizedBox(
+                      width: 54,
+                      height: 54,
+                      child: Icon(
+                        Icons.close_rounded,
+                        color: HomeTokens.text,
+                        size: 42,
                       ),
                     ),
-                  ]),
-                  const SizedBox(height: 28),
-
-                  // Register Button
-                  BlocBuilder<AuthBloc, AuthState>(
-                    builder: (context, state) => CustomButton(
-                      text: AppStrings.signup,
-                      isLoading: state is AuthLoading,
-                      onPressed: state is AuthLoading ? null : _register,
-                    ),
                   ),
-                  const SizedBox(height: 32),
+                ),
 
-                  // Login link
-                  Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                SingleChildScrollView(
+                  keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 34),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          AppStrings.alreadyHaveAccount,
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: AppColors.textSecondary,
-                            fontSize: 14,
+                        const SizedBox(height: 34),
+
+                        Text(
+                          'ATHIMART',
+                          style: HomeTokens.label(
+                            color: HomeTokens.text,
+                            size: 11,
                           ),
                         ),
-                        GestureDetector(
-                          onTap: () => context.pop(),
-                          child: ShaderMask(
-                            shaderCallback: (bounds) =>
-                                AppColors.primaryGradient.createShader(bounds),
-                            child: const Text(
-                              AppStrings.signIn,
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
+
+                        const SizedBox(height: 84),
+
+                        Text(
+                          'CREATE\nACCOUNT',
+                          style: HomeTokens.displayLarge().copyWith(
+                            fontSize: 42,
+                            letterSpacing: 2.2,
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        Text(
+                          'Join Athimart and start shopping.',
+                          style: HomeTokens.body(size: 15),
+                        ),
+
+                        const SizedBox(height: 38),
+
+                        _AuthTextField(
+                          controller: _nameCtrl,
+                          hint: 'Full name',
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Full name is required';
+                            }
+                            return null;
+                          },
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        _AuthTextField(
+                          controller: _phoneCtrl,
+                          hint: 'Phone number',
+                          keyboardType: TextInputType.phone,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Phone number is required';
+                            }
+                            return null;
+                          },
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        _AuthTextField(
+                          controller: _emailCtrl,
+                          hint: 'Email address',
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Email is required';
+                            }
+                            if (!value.contains('@')) {
+                              return 'Enter a valid email';
+                            }
+                            return null;
+                          },
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        _AuthTextField(
+                          controller: _passwordCtrl,
+                          hint: 'Password',
+                          obscureText: _obscurePassword,
+                          suffixIcon: IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: HomeTokens.darkGray,
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Password is required';
+                            }
+                            if (value.length < 8) {
+                              return 'Password must be at least 8 characters';
+                            }
+                            return null;
+                          },
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        _AuthTextField(
+                          controller: _confirmPasswordCtrl,
+                          hint: 'Confirm password',
+                          obscureText: _obscureConfirmPassword,
+                          suffixIcon: IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _obscureConfirmPassword =
+                                !_obscureConfirmPassword;
+                              });
+                            },
+                            icon: Icon(
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: HomeTokens.darkGray,
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Confirm password is required';
+                            }
+                            if (value != _passwordCtrl.text) {
+                              return 'Passwords do not match';
+                            }
+                            return null;
+                          },
+                        ),
+
+                        const SizedBox(height: 36),
+
+                        BlocBuilder<AuthBloc, AuthState>(
+                          builder: (context, state) {
+                            final loading = state is AuthLoading;
+
+                            return _AuthPrimaryButton(
+                              text: 'CREATE ACCOUNT',
+                              loading: loading,
+                              onTap: loading ? null : _register,
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 26),
+
+                        Center(
+                          child: GestureDetector(
+                            onTap: () => context.go('/auth/login'),
+                            child: RichText(
+                              text: TextSpan(
+                                style: HomeTokens.body(size: 13),
+                                children: [
+                                  const TextSpan(
+                                    text: 'Already have an account? ',
+                                  ),
+                                  TextSpan(
+                                    text: 'Sign in',
+                                    style: HomeTokens.bodyBold(size: 13),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ),
+
+                        const SizedBox(height: 40),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 32),
-                ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final bool obscureText;
+  final TextInputType keyboardType;
+  final Widget? suffixIcon;
+  final String? Function(String?)? validator;
+
+  const _AuthTextField({
+    required this.controller,
+    required this.hint,
+    this.obscureText = false,
+    this.keyboardType = TextInputType.text,
+    this.suffixIcon,
+    this.validator,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      cursorColor: HomeTokens.text,
+      style: HomeTokens.displayMedium().copyWith(
+        fontSize: 25,
+        letterSpacing: 0.2,
+      ),
+      validator: validator,
+      decoration: InputDecoration(
+        filled: false,
+        fillColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        hintText: hint,
+        hintStyle: HomeTokens.displayMedium(
+          color: const Color(0xFFB8B8B8),
+        ).copyWith(
+          fontSize: 25,
+          letterSpacing: 0.2,
+        ),
+        suffixIcon: suffixIcon,
+        errorStyle: HomeTokens.body(
+          size: 12,
+          color: HomeTokens.sale,
+        ),
+        contentPadding: const EdgeInsets.only(bottom: 10),
+        border: const UnderlineInputBorder(
+          borderSide: BorderSide(color: HomeTokens.text, width: 1.2),
+        ),
+        enabledBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: HomeTokens.text, width: 1.2),
+        ),
+        focusedBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: HomeTokens.text, width: 1.6),
+        ),
+        errorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: HomeTokens.sale, width: 1.2),
+        ),
+        focusedErrorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: HomeTokens.sale, width: 1.6),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthPrimaryButton extends StatelessWidget {
+  final String text;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  const _AuthPrimaryButton({
+    required this.text,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: onTap == null ? HomeTokens.lightGray : HomeTokens.text,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 54,
+          width: double.infinity,
+          child: Center(
+            child: loading
+                ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                color: HomeTokens.linen,
+                strokeWidth: 2,
+              ),
+            )
+                : Text(
+              text,
+              style: HomeTokens.label(
+                color: HomeTokens.linen,
+                size: 11,
               ),
             ),
           ),

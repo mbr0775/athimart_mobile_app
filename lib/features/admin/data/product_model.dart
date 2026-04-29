@@ -1,7 +1,10 @@
 // lib/features/admin/data/product_model.dart
+
 class AdminProduct {
   final String? id;
   final String name;
+  final String companyName;
+  final String subCategory;
   final String description;
   final double price;
   final double originalPrice;
@@ -11,11 +14,13 @@ class AdminProduct {
   final bool isActive;
   final bool isFeatured;
   final int discountPercent;
-  final List<String> imageUrls; // ← NEW: list of uploaded image URLs
+  final List<String> imageUrls;
 
   const AdminProduct({
     this.id,
     required this.name,
+    this.companyName = 'Athimart',
+    this.subCategory = 'General',
     required this.description,
     required this.price,
     required this.originalPrice,
@@ -28,61 +33,104 @@ class AdminProduct {
     this.imageUrls = const [],
   });
 
-  // First image URL (used as thumbnail)
-  String? get primaryImage => imageUrls.isNotEmpty ? imageUrls.first : null;
-  bool get hasImages => imageUrls.isNotEmpty;
+  String? get primaryImage {
+    return imageUrls.isNotEmpty ? imageUrls.first : null;
+  }
 
-  factory AdminProduct.fromMap(Map<String, dynamic> m) {
-    // image_urls stored as jsonb array in Supabase
-    List<String> imgs = [];
-    final raw = m['image_urls'];
-    if (raw is List) {
-      imgs = raw.map((e) => e.toString()).toList();
+  bool get hasImages {
+    return imageUrls.isNotEmpty;
+  }
+
+  factory AdminProduct.fromMap(Map<String, dynamic> map) {
+    List<String> images = [];
+
+    final rawImages = map['image_urls'];
+    if (rawImages is List) {
+      images = rawImages.map((item) => item.toString()).toList();
     }
+
+    final priceValue = map['price'];
+    final originalPriceValue = map['original_price'];
+
+    final parsedPrice = priceValue is num
+        ? priceValue.toDouble()
+        : double.tryParse(priceValue?.toString() ?? '') ?? 0;
+
     return AdminProduct(
-      id: m['id'],
-      name: m['name'] ?? '',
-      description: m['description'] ?? '',
-      price: (m['price'] as num).toDouble(),
-      originalPrice: (m['original_price'] as num? ?? m['price'] as num).toDouble(),
-      category: m['category'] ?? '',
-      emoji: m['emoji'] ?? '📦',
-      stock: m['stock'] ?? 0,
-      isActive: m['is_active'] ?? true,
-      isFeatured: m['is_featured'] ?? false,
-      discountPercent: m['discount_percent'] ?? 0,
-      imageUrls: imgs,
+      id: map['id']?.toString(),
+      name: map['name']?.toString() ?? '',
+      companyName: map['company_name']?.toString() ?? 'Athimart',
+      subCategory: map['sub_category']?.toString() ?? 'General',
+      description: map['description']?.toString() ?? '',
+      price: parsedPrice,
+      originalPrice: originalPriceValue is num
+          ? originalPriceValue.toDouble()
+          : double.tryParse(originalPriceValue?.toString() ?? '') ??
+          parsedPrice,
+      category: map['category']?.toString() ?? '',
+      emoji: map['emoji']?.toString() ?? '📦',
+      stock: map['stock'] is num
+          ? (map['stock'] as num).toInt()
+          : int.tryParse(map['stock']?.toString() ?? '') ?? 0,
+      isActive: map['is_active'] ?? true,
+      isFeatured: map['is_featured'] ?? false,
+      discountPercent: map['discount_percent'] is num
+          ? (map['discount_percent'] as num).toInt()
+          : int.tryParse(map['discount_percent']?.toString() ?? '') ?? 0,
+      imageUrls: images,
     );
   }
 
-  Map<String, dynamic> toMap() => {
-    'name': name,
-    'description': description,
-    'price': price,
-    'original_price': originalPrice,
-    'category': category,
-    'emoji': emoji,
-    'stock': stock,
-    'is_active': isActive,
-    'is_featured': isFeatured,
-    'discount_percent': discountPercent,
-    'image_urls': imageUrls, // ← stored as jsonb in Supabase
-    'updated_at': DateTime.now().toIso8601String(),
-  };
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'company_name': companyName,
+      'sub_category': subCategory,
+      'description': description,
+      'price': price,
+      'original_price': originalPrice,
+      'category': category,
+      'emoji': emoji,
+      'stock': stock,
+      'is_active': isActive,
+      'is_featured': isFeatured,
+      'discount_percent': discountPercent,
+      'image_urls': imageUrls,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+  }
 
   AdminProduct copyWith({
-    String? id, String? name, String? description, double? price,
-    double? originalPrice, String? category, String? emoji, int? stock,
-    bool? isActive, bool? isFeatured, int? discountPercent,
+    String? id,
+    String? name,
+    String? companyName,
+    String? subCategory,
+    String? description,
+    double? price,
+    double? originalPrice,
+    String? category,
+    String? emoji,
+    int? stock,
+    bool? isActive,
+    bool? isFeatured,
+    int? discountPercent,
     List<String>? imageUrls,
-  }) => AdminProduct(
-    id: id ?? this.id, name: name ?? this.name,
-    description: description ?? this.description, price: price ?? this.price,
-    originalPrice: originalPrice ?? this.originalPrice,
-    category: category ?? this.category, emoji: emoji ?? this.emoji,
-    stock: stock ?? this.stock, isActive: isActive ?? this.isActive,
-    isFeatured: isFeatured ?? this.isFeatured,
-    discountPercent: discountPercent ?? this.discountPercent,
-    imageUrls: imageUrls ?? this.imageUrls,
-  );
+  }) {
+    return AdminProduct(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      companyName: companyName ?? this.companyName,
+      subCategory: subCategory ?? this.subCategory,
+      description: description ?? this.description,
+      price: price ?? this.price,
+      originalPrice: originalPrice ?? this.originalPrice,
+      category: category ?? this.category,
+      emoji: emoji ?? this.emoji,
+      stock: stock ?? this.stock,
+      isActive: isActive ?? this.isActive,
+      isFeatured: isFeatured ?? this.isFeatured,
+      discountPercent: discountPercent ?? this.discountPercent,
+      imageUrls: imageUrls ?? this.imageUrls,
+    );
+  }
 }

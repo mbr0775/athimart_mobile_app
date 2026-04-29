@@ -1,20 +1,28 @@
 // lib/features/admin/presentation/screens/admin_add_product.dart
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../../../core/constants/app_colors.dart';
-import '../../../../../core/services/image_upload_service.dart';
+
+import '../../../../core/constants/product_taxonomy.dart';
+import '../../../../core/services/image_upload_service.dart';
 import '../../data/product_model.dart';
 import '../bloc/product_bloc.dart';
 import '../bloc/product_event.dart';
 import '../bloc/product_state.dart';
+import '../theme/admin_tokens.dart';
+import '../widgets/admin_ui.dart';
 import 'admin_shell.dart';
 
 class AdminAddProductScreen extends StatefulWidget {
   final Map<String, dynamic>? product;
-  const AdminAddProductScreen({super.key, required this.product});
+
+  const AdminAddProductScreen({
+    super.key,
+    required this.product,
+  });
 
   @override
   State<AdminAddProductScreen> createState() => _AdminAddProductScreenState();
@@ -22,6 +30,8 @@ class AdminAddProductScreen extends StatefulWidget {
 
 class _AdminAddProductScreenState extends State<AdminAddProductScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  late final TextEditingController _companyCtrl;
   late final TextEditingController _nameCtrl;
   late final TextEditingController _descCtrl;
   late final TextEditingController _priceCtrl;
@@ -29,93 +39,184 @@ class _AdminAddProductScreenState extends State<AdminAddProductScreen> {
   late final TextEditingController _stockCtrl;
   late final TextEditingController _discountCtrl;
 
-  String _selectedCategory = 'AI Gadgets';
+  String _selectedCategory = 'Digital Products';
+  String _selectedSubCategory = 'Cameras';
   String _selectedEmoji = '📦';
+
   bool _isActive = true;
   bool _isFeatured = false;
-  bool get _isEditing => widget.product != null;
-
-  // ── Image state ──────────────────────────────────────────────────────────
-  final List<File> _newImageFiles = [];       // freshly picked, not yet uploaded
-  List<String> _existingImageUrls = [];       // already on Supabase (edit mode)
-  final List<String> _removedUrls = [];       // urls flagged for deletion
   bool _uploading = false;
 
-  final _picker = ImagePicker();
+  final List<File> _newImageFiles = [];
+  List<String> _existingImageUrls = [];
+  final List<String> _removedUrls = [];
 
-  final _categories = [
-    'IT Solutions', 'AI Gadgets', 'Fitness Tech', 'Essences',
-    'Agarwood', 'Fashion', 'Vehicles', 'Real Estate',
-  ];
+  final ImagePicker _picker = ImagePicker();
 
-  final _emojis = [
-    '📦', '💻', '🤖', '📱', '⌚', '🎧', '🌿', '🌹', '✨', '🪵',
-    '📿', '💪', '🧘', '🏋️', '🚗', '🏠', '👗', '👟', '📊', '🔧',
-    '🌸', '🪞', '📸', '🔋', '💡', '🎮', '🖥️', '⌨️', '🖱️', '🔑',
-  ];
+  bool get _isEditing => widget.product != null;
 
   @override
   void initState() {
     super.initState();
-    final p = widget.product;
-    _nameCtrl = TextEditingController(text: p?['name'] ?? '');
-    _descCtrl = TextEditingController(text: p?['description'] ?? '');
-    _priceCtrl = TextEditingController(text: p?['price']?.toString() ?? '');
-    _origPriceCtrl =
-        TextEditingController(text: p?['original_price']?.toString() ?? '');
-    _stockCtrl = TextEditingController(text: p?['stock']?.toString() ?? '0');
-    _discountCtrl =
-        TextEditingController(text: p?['discount_percent']?.toString() ?? '0');
-    if (p != null) {
-      _selectedCategory = p['category'] ?? 'AI Gadgets';
-      _selectedEmoji = p['emoji'] ?? '📦';
-      _isActive = p['is_active'] ?? true;
-      _isFeatured = p['is_featured'] ?? false;
-      final raw = p['image_urls'];
-      if (raw is List) {
-        _existingImageUrls = raw.map((e) => e.toString()).toList();
+
+    final product = widget.product;
+
+    _companyCtrl = TextEditingController(
+      text: product?['company_name']?.toString() ?? 'Athimart',
+    );
+
+    _nameCtrl = TextEditingController(
+      text: product?['name']?.toString() ?? '',
+    );
+
+    _descCtrl = TextEditingController(
+      text: product?['description']?.toString() ?? '',
+    );
+
+    _priceCtrl = TextEditingController(
+      text: product?['price']?.toString() ?? '',
+    );
+
+    _origPriceCtrl = TextEditingController(
+      text: product?['original_price']?.toString() ?? '',
+    );
+
+    _stockCtrl = TextEditingController(
+      text: product?['stock']?.toString() ?? '0',
+    );
+
+    _discountCtrl = TextEditingController(
+      text: product?['discount_percent']?.toString() ?? '0',
+    );
+
+    if (product != null) {
+      final rawCategory = product['category']?.toString() ?? 'Digital Products';
+
+      _selectedCategory = ProductTaxonomy.isValidCategory(rawCategory)
+          ? rawCategory
+          : 'Digital Products';
+
+      final rawSubCategory =
+          product['sub_category']?.toString() ??
+              ProductTaxonomy.firstSubcategoryFor(_selectedCategory);
+
+      _selectedSubCategory =
+      ProductTaxonomy.isValidSubcategory(_selectedCategory, rawSubCategory)
+          ? rawSubCategory
+          : ProductTaxonomy.firstSubcategoryFor(_selectedCategory);
+
+      _selectedEmoji = product['emoji']?.toString() ?? '📦';
+      _isActive = product['is_active'] == true;
+      _isFeatured = product['is_featured'] == true;
+
+      final rawImages = product['image_urls'];
+      if (rawImages is List) {
+        _existingImageUrls = rawImages.map((item) => item.toString()).toList();
       }
     }
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _descCtrl.dispose(); _priceCtrl.dispose();
-    _origPriceCtrl.dispose(); _stockCtrl.dispose(); _discountCtrl.dispose();
+    _companyCtrl.dispose();
+    _nameCtrl.dispose();
+    _descCtrl.dispose();
+    _priceCtrl.dispose();
+    _origPriceCtrl.dispose();
+    _stockCtrl.dispose();
+    _discountCtrl.dispose();
     super.dispose();
   }
 
-  // ── Image picking ─────────────────────────────────────────────────────────
+  int get _totalImages => _existingImageUrls.length + _newImageFiles.length;
+
+  final List<String> _emojis = const [
+    '📦',
+    '💻',
+    '🤖',
+    '📱',
+    '⌚',
+    '🎧',
+    '🌿',
+    '🌹',
+    '✨',
+    '🪵',
+    '💪',
+    '🧘',
+    '🏋️',
+    '🚗',
+    '🏠',
+    '👗',
+    '👟',
+    '📊',
+    '🔧',
+    '📸',
+    '🔋',
+    '💡',
+    '🎮',
+    '🖥️',
+    '⌨️',
+    '🖱️',
+    '🔑',
+  ];
+
+  void _showSnack(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AdminTokens.danger : AdminTokens.text,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _pickImages() async {
-    final totalAllowed = 5 - _existingImageUrls.length - _newImageFiles.length;
-    if (totalAllowed <= 0) {
+    final allowed = 5 - _totalImages;
+
+    if (allowed <= 0) {
       _showSnack('Maximum 5 images allowed', isError: true);
       return;
     }
+
     final picked = await _picker.pickMultiImage(imageQuality: 80);
+
     if (picked.isEmpty) return;
-    final limited = picked.take(totalAllowed).toList();
+
+    final limited = picked.take(allowed).toList();
+
     setState(() {
-      for (final xf in limited) {
-        _newImageFiles.add(File(xf.path));
+      for (final image in limited) {
+        _newImageFiles.add(File(image.path));
       }
     });
   }
 
   Future<void> _pickFromCamera() async {
-    final totalAllowed = 5 - _existingImageUrls.length - _newImageFiles.length;
-    if (totalAllowed <= 0) {
+    final allowed = 5 - _totalImages;
+
+    if (allowed <= 0) {
       _showSnack('Maximum 5 images allowed', isError: true);
       return;
     }
-    final xf = await _picker.pickImage(
-        source: ImageSource.camera, imageQuality: 80);
-    if (xf == null) return;
-    setState(() => _newImageFiles.add(File(xf.path)));
+
+    final picked = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      _newImageFiles.add(File(picked.path));
+    });
   }
 
-  void _removeNewFile(int idx) =>
-      setState(() => _newImageFiles.removeAt(idx));
+  void _removeNewFile(int index) {
+    setState(() {
+      _newImageFiles.removeAt(index);
+    });
+  }
 
   void _removeExistingUrl(String url) {
     setState(() {
@@ -124,481 +225,742 @@ class _AdminAddProductScreenState extends State<AdminAddProductScreen> {
     });
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+  void _showImageSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AdminTokens.linen,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
+            decoration: const BoxDecoration(
+              gradient: AdminTokens.pageGradient,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'ADD IMAGE',
+                  style: AdminTokens.displayMedium(size: 30),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  height: 1.2,
+                  width: double.infinity,
+                  color: AdminTokens.text,
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SourceOption(
+                        icon: Icons.photo_library_outlined,
+                        label: 'Gallery',
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          _pickImages();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SourceOption(
+                        icon: Icons.camera_alt_outlined,
+                        label: 'Camera',
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          _pickFromCamera();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-    setState(() => _uploading = true);
+  void _changeCategory(String value) {
+    setState(() {
+      _selectedCategory = value;
+      _selectedSubCategory = ProductTaxonomy.firstSubcategoryFor(value);
+    });
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() {
+      _uploading = true;
+    });
 
     try {
-      // 1. Upload new images → get URLs
       List<String> newUrls = [];
+
       if (_newImageFiles.isNotEmpty) {
         newUrls = await ImageUploadService.uploadImages(_newImageFiles);
       }
 
-      // 2. Delete removed images from storage
       for (final url in _removedUrls) {
         await ImageUploadService.deleteImage(url);
       }
 
-      // 3. Build final image list: kept existing + new
-      final allImages = [..._existingImageUrls, ...newUrls];
+      final allImages = [
+        ..._existingImageUrls,
+        ...newUrls,
+      ];
+
+      final parsedPrice = double.parse(_priceCtrl.text.trim());
+      final parsedOriginalPrice =
+          double.tryParse(_origPriceCtrl.text.trim()) ?? parsedPrice;
+
+      final companyName = _companyCtrl.text.trim().isEmpty
+          ? 'Athimart'
+          : _companyCtrl.text.trim();
 
       final product = AdminProduct(
-        id: widget.product?['id'],
+        id: widget.product?['id']?.toString(),
         name: _nameCtrl.text.trim(),
+        companyName: companyName,
+        subCategory: _selectedSubCategory,
         description: _descCtrl.text.trim(),
-        price: double.parse(_priceCtrl.text),
-        originalPrice:
-            double.tryParse(_origPriceCtrl.text) ?? double.parse(_priceCtrl.text),
+        price: parsedPrice,
+        originalPrice: parsedOriginalPrice,
         category: _selectedCategory,
         emoji: _selectedEmoji,
-        stock: int.tryParse(_stockCtrl.text) ?? 0,
-        discountPercent: int.tryParse(_discountCtrl.text) ?? 0,
+        stock: int.tryParse(_stockCtrl.text.trim()) ?? 0,
+        discountPercent: int.tryParse(_discountCtrl.text.trim()) ?? 0,
         isActive: _isActive,
         isFeatured: _isFeatured,
         imageUrls: allImages,
       );
 
       if (!mounted) return;
+
       if (_isEditing) {
         context.read<ProductBloc>().add(ProductUpdate(product));
       } else {
         context.read<ProductBloc>().add(ProductCreate(product));
       }
     } catch (e) {
-      setState(() => _uploading = false);
-      _showSnack('Image upload failed: $e', isError: true);
+      if (!mounted) return;
+
+      setState(() {
+        _uploading = false;
+      });
+
+      _showSnack('Failed to save product: $e', isError: true);
     }
   }
 
-  void _showSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg,
-          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
-      backgroundColor: isError ? AppColors.accentRed : AppColors.accentGreen,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
-  }
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<ProductBloc, ProductState>(
+      listener: (context, state) {
+        if (state is ProductOperationSuccess) {
+          setState(() {
+            _uploading = false;
+          });
 
-  void _showImageSourceSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 40, height: 4,
-              decoration: BoxDecoration(color: AppColors.border,
-                borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            const Text('Add Product Image',
-              style: TextStyle(fontFamily: 'PlayfairDisplay', fontSize: 18,
-                fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-            const SizedBox(height: 20),
-            Row(children: [
-              Expanded(
-                child: _SourceBtn(
-                  icon: Icons.photo_library_rounded,
-                  label: 'Gallery',
-                  color: AppColors.accent,
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickImages();
-                  },
-                ),
+          _showSnack(state.message);
+          context.go('/admin/products');
+        }
+
+        if (state is ProductError) {
+          setState(() {
+            _uploading = false;
+          });
+
+          _showSnack(state.message, isError: true);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AdminTokens.linen,
+        appBar: AdminAppBar(
+          title: _isEditing ? 'Edit Product' : 'Add Product',
+        ),
+        body: AdminPage(
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.all(AdminTokens.pagePadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _isEditing ? 'EDIT\nPRODUCT' : 'NEW\nPRODUCT',
+                    style: AdminTokens.displayLarge(size: 42),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    height: 1.2,
+                    width: double.infinity,
+                    color: AdminTokens.text,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Add category, product type, company, images, price and stock.',
+                    style: AdminTokens.body(size: 14),
+                  ),
+
+                  const SizedBox(height: 34),
+
+                  _SectionLabel(
+                    title: 'Product Images',
+                    subtitle: 'Add up to 5 images. First image is main.',
+                  ),
+                  const SizedBox(height: 14),
+
+                  SizedBox(
+                    height: 112,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        ..._existingImageUrls.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final url = entry.value;
+
+                          return _ImageSlot(
+                            child: _NetworkImageTile(
+                              url: url,
+                              isMain: index == 0,
+                              onRemove: () => _removeExistingUrl(url),
+                            ),
+                          );
+                        }),
+
+                        ..._newImageFiles.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final file = entry.value;
+                          final isMain =
+                              _existingImageUrls.isEmpty && index == 0;
+
+                          return _ImageSlot(
+                            child: _LocalImageTile(
+                              file: file,
+                              isMain: isMain,
+                              onRemove: () => _removeNewFile(index),
+                            ),
+                          );
+                        }),
+
+                        if (_totalImages < 5)
+                          _ImageSlot(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _showImageSourceSheet,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color:
+                                  AdminTokens.white.withValues(alpha: 0.65),
+                                  border: Border.all(
+                                    color: AdminTokens.border,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.add_photo_alternate_outlined,
+                                      color: AdminTokens.text,
+                                      size: 28,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '$_totalImages/5',
+                                      style: AdminTokens.label(size: 9),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  _SectionLabel(
+                    title: 'Fallback Emoji',
+                    subtitle: 'Used when product has no image.',
+                  ),
+                  const SizedBox(height: 14),
+
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _emojis.map((emoji) {
+                      final selected = emoji == _selectedEmoji;
+
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedEmoji = emoji;
+                          });
+                        },
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AdminTokens.text
+                                : AdminTokens.white.withValues(alpha: 0.58),
+                            border: Border.all(
+                              color: selected
+                                  ? AdminTokens.text
+                                  : AdminTokens.border,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              emoji,
+                              style: const TextStyle(fontSize: 22),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 34),
+
+                  _SectionLabel(title: 'Category'),
+                  const SizedBox(height: 10),
+                  _CategoryDropdown(
+                    value: _selectedCategory,
+                    items: ProductTaxonomy.categories,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      _changeCategory(value);
+                    },
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  _SectionLabel(title: 'Product Type'),
+                  const SizedBox(height: 10),
+                  _CategoryDropdown(
+                    value: _selectedSubCategory,
+                    items: ProductTaxonomy.subcategoriesFor(_selectedCategory),
+                    onChanged: (value) {
+                      if (value == null) return;
+
+                      setState(() {
+                        _selectedSubCategory = value;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  _SectionLabel(title: 'Company / Brand Name'),
+                  const SizedBox(height: 8),
+                  AdminTextField(
+                    controller: _companyCtrl,
+                    hint: 'Canon, Dell, Athimart, Goviceylon...',
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Company name is required';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  _SectionLabel(title: 'Product Name'),
+                  const SizedBox(height: 8),
+                  AdminTextField(
+                    controller: _nameCtrl,
+                    hint: 'Canon EOS Camera, Website Package...',
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Product name is required';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  _SectionLabel(title: 'Description'),
+                  const SizedBox(height: 8),
+                  AdminTextField(
+                    controller: _descCtrl,
+                    hint: 'Product description...',
+                    maxLines: 3,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionLabel(title: 'Price'),
+                            const SizedBox(height: 8),
+                            AdminTextField(
+                              controller: _priceCtrl,
+                              hint: '0.00',
+                              keyboardType:
+                              const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              validator: _numberValidatorRequired,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionLabel(title: 'Original'),
+                            const SizedBox(height: 8),
+                            AdminTextField(
+                              controller: _origPriceCtrl,
+                              hint: '0.00',
+                              keyboardType:
+                              const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              validator: _numberValidatorOptional,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionLabel(title: 'Stock'),
+                            const SizedBox(height: 8),
+                            AdminTextField(
+                              controller: _stockCtrl,
+                              hint: '0',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionLabel(title: 'Discount %'),
+                            const SizedBox(height: 8),
+                            AdminTextField(
+                              controller: _discountCtrl,
+                              hint: '0',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  _SectionLabel(
+                    title: 'Settings',
+                    subtitle: 'Control visibility and featured placement.',
+                  ),
+                  const SizedBox(height: 14),
+
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AdminTokens.white.withValues(alpha: 0.64),
+                      border: Border.all(color: AdminTokens.border),
+                    ),
+                    child: Column(
+                      children: [
+                        _SettingRow(
+                          icon: Icons.check_circle_outline_rounded,
+                          label: 'Active',
+                          subtitle: 'Visible to customers',
+                          value: _isActive,
+                          activeColor: AdminTokens.success,
+                          onChanged: (value) {
+                            setState(() {
+                              _isActive = value;
+                            });
+                          },
+                        ),
+                        Container(height: 1, color: AdminTokens.border),
+                        _SettingRow(
+                          icon: Icons.star_border_rounded,
+                          label: 'Featured',
+                          subtitle: 'Show in featured section',
+                          value: _isFeatured,
+                          activeColor: AdminTokens.text,
+                          onChanged: (value) {
+                            setState(() {
+                              _isFeatured = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 34),
+
+                  BlocBuilder<ProductBloc, ProductState>(
+                    builder: (context, state) {
+                      final loading = state is ProductLoading || _uploading;
+
+                      return AdminPrimaryButton(
+                        text: _isEditing ? 'Save Changes' : 'Create Product',
+                        icon: _isEditing
+                            ? Icons.save_outlined
+                            : Icons.add_rounded,
+                        loading: loading,
+                        onTap: loading ? null : _submit,
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 40),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _SourceBtn(
-                  icon: Icons.camera_alt_rounded,
-                  label: 'Camera',
-                  color: AppColors.primary,
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickFromCamera();
-                  },
-                ),
-              ),
-            ]),
-            const SizedBox(height: 8),
-          ]),
+            ),
+          ),
         ),
       ),
     );
   }
 
+  String? _numberValidatorRequired(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Required';
+    }
+
+    if (double.tryParse(value.trim()) == null) {
+      return 'Invalid number';
+    }
+
+    return null;
+  }
+
+  String? _numberValidatorOptional(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+
+    if (double.tryParse(value.trim()) == null) {
+      return 'Invalid number';
+    }
+
+    return null;
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+
+  const _SectionLabel({
+    required this.title,
+    this.subtitle,
+  });
+
   @override
   Widget build(BuildContext context) {
-    final totalImages = _existingImageUrls.length + _newImageFiles.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: AdminTokens.label(
+            color: AdminTokens.text,
+            size: 10,
+          ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle!,
+            style: AdminTokens.body(size: 12),
+          ),
+        ],
+      ],
+    );
+  }
+}
 
-    return BlocListener<ProductBloc, ProductState>(
-      listener: (context, state) {
-        if (state is ProductOperationSuccess) {
-          setState(() => _uploading = false);
-          _showSnack(state.message);
-          context.go('/admin/products');
-        }
-        if (state is ProductError) {
-          setState(() => _uploading = false);
-          _showSnack(state.message, isError: true);
-        }
-      },
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AdminAppBar(title: _isEditing ? 'Edit Product' : 'Add Product'),
-        body: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+class _ImageSlot extends StatelessWidget {
+  final Widget child;
 
-                // ── PRODUCT IMAGES ──────────────────────────────────────────
-                const _SectionLabel('Product Images'),
-                const SizedBox(height: 4),
-                Text('Add up to 5 images • First image is the main display',
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,
-                    color: AppColors.textHint)),
-                const SizedBox(height: 12),
+  const _ImageSlot({
+    required this.child,
+  });
 
-                // Image grid
-                SizedBox(
-                  height: 110,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      // Existing uploaded images
-                      ..._existingImageUrls.asMap().entries.map((entry) {
-                        final i = entry.key;
-                        final url = entry.value;
-                        return _ImageSlot(
-                          child: Stack(fit: StackFit.expand, children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: Image.network(url, fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: AppColors.card,
-                                  child: const Icon(Icons.broken_image_rounded,
-                                    color: AppColors.textHint, size: 30))),
-                            ),
-                            if (i == 0)
-                              Positioned(top: 4, left: 4,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary,
-                                    borderRadius: BorderRadius.circular(6)),
-                                  child: const Text('MAIN',
-                                    style: TextStyle(fontFamily: 'Poppins',
-                                      fontSize: 8, fontWeight: FontWeight.w800,
-                                      color: Colors.black)))),
-                            // Remove button
-                            Positioned(top: 4, right: 4,
-                              child: GestureDetector(
-                                onTap: () => _removeExistingUrl(url),
-                                child: Container(
-                                  width: 22, height: 22,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.accentRed,
-                                    shape: BoxShape.circle),
-                                  child: const Icon(Icons.close_rounded,
-                                    size: 13, color: Colors.white)))),
-                          ]),
-                        );
-                      }),
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 102,
+      height: 102,
+      margin: const EdgeInsets.only(right: 10),
+      child: child,
+    );
+  }
+}
 
-                      // New local files
-                      ..._newImageFiles.asMap().entries.map((entry) {
-                        final i = entry.key;
-                        final file = entry.value;
-                        final isMain =
-                            _existingImageUrls.isEmpty && i == 0;
-                        return _ImageSlot(
-                          child: Stack(fit: StackFit.expand, children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: Image.file(file, fit: BoxFit.cover)),
-                            if (isMain)
-                              Positioned(top: 4, left: 4,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary,
-                                    borderRadius: BorderRadius.circular(6)),
-                                  child: const Text('MAIN',
-                                    style: TextStyle(fontFamily: 'Poppins',
-                                      fontSize: 8, fontWeight: FontWeight.w800,
-                                      color: Colors.black)))),
-                            // Remove button
-                            Positioned(top: 4, right: 4,
-                              child: GestureDetector(
-                                onTap: () => _removeNewFile(i),
-                                child: Container(
-                                  width: 22, height: 22,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.accentRed,
-                                    shape: BoxShape.circle),
-                                  child: const Icon(Icons.close_rounded,
-                                    size: 13, color: Colors.white)))),
-                            // Upload pending indicator
-                            Positioned(bottom: 4, right: 4,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(5)),
-                                child: const Text('NEW',
-                                  style: TextStyle(fontFamily: 'Poppins',
-                                    fontSize: 7, color: Colors.white,
-                                    fontWeight: FontWeight.w700)))),
-                          ]),
-                        );
-                      }),
+class _NetworkImageTile extends StatelessWidget {
+  final String url;
+  final bool isMain;
+  final VoidCallback onRemove;
 
-                      // Add image button (show if < 5 images)
-                      if (totalImages < 5)
-                        _ImageSlot(
-                          child: GestureDetector(
-                            onTap: _showImageSourceSheet,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.card,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                    color: AppColors.border,
-                                    style: BorderStyle.solid,
-                                    width: 1.5),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 36, height: 36,
-                                    decoration: BoxDecoration(
-                                      gradient: AppColors.primaryGradient,
-                                      shape: BoxShape.circle),
-                                    child: const Icon(Icons.add_photo_alternate_rounded,
-                                      color: Colors.black, size: 18)),
-                                  const SizedBox(height: 6),
-                                  Text('$totalImages/5',
-                                    style: const TextStyle(fontFamily: 'Poppins',
-                                      fontSize: 10, color: AppColors.textHint)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+  const _NetworkImageTile({
+    required this.url,
+    required this.isMain,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) {
+              return Container(
+                color: AdminTokens.card,
+                child: const Icon(
+                  Icons.broken_image_outlined,
+                  color: AdminTokens.lightGray,
+                  size: 30,
                 ),
+              );
+            },
+          ),
+        ),
+        if (isMain) const _ImageBadge(text: 'MAIN'),
+        _RemoveImageButton(onTap: onRemove),
+      ],
+    );
+  }
+}
 
-                // ── EMOJI PICKER ────────────────────────────────────────────
-                const SizedBox(height: 24),
-                Row(children: [
-                  const _SectionLabel('Fallback Emoji'),
-                  const SizedBox(width: 8),
-                  Text('(used if no image)',
-                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 10,
-                      color: AppColors.textHint)),
-                ]),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8, runSpacing: 8,
-                  children: _emojis.map((e) {
-                    final selected = e == _selectedEmoji;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedEmoji = e),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 46, height: 46,
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? AppColors.primary.withOpacity(0.2)
-                              : AppColors.card,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: selected ? AppColors.primary : AppColors.border,
-                            width: selected ? 2 : 1)),
-                        child: Center(child: Text(e,
-                          style: const TextStyle(fontSize: 22))),
-                      ),
-                    );
-                  }).toList(),
-                ),
+class _LocalImageTile extends StatelessWidget {
+  final File file;
+  final bool isMain;
+  final VoidCallback onRemove;
 
-                // ── FIELDS ──────────────────────────────────────────────────
-                const SizedBox(height: 24),
-                const _SectionLabel('Product Name'),
-                const SizedBox(height: 8),
-                _Field(controller: _nameCtrl, hint: 'e.g. Smart AI Watch Pro',
-                  validator: (v) => v!.isEmpty ? 'Name is required' : null),
+  const _LocalImageTile({
+    required this.file,
+    required this.isMain,
+    required this.onRemove,
+  });
 
-                const SizedBox(height: 16),
-                const _SectionLabel('Description'),
-                const SizedBox(height: 8),
-                _Field(controller: _descCtrl,
-                  hint: 'Product description...', maxLines: 3),
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Image.file(
+            file,
+            fit: BoxFit.cover,
+          ),
+        ),
+        if (isMain) const _ImageBadge(text: 'MAIN'),
+        const Positioned(
+          left: 6,
+          bottom: 6,
+          child: _SmallImageLabel(text: 'NEW'),
+        ),
+        _RemoveImageButton(onTap: onRemove),
+      ],
+    );
+  }
+}
 
-                const SizedBox(height: 16),
-                const _SectionLabel('Category'),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border)),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedCategory,
-                      isExpanded: true,
-                      dropdownColor: AppColors.card,
-                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
-                        color: AppColors.textPrimary),
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.textHint),
-                      items: _categories.map((c) => DropdownMenuItem(
-                        value: c, child: Text(c))).toList(),
-                      onChanged: (v) => setState(() => _selectedCategory = v!),
-                    ),
-                  ),
-                ),
+class _ImageBadge extends StatelessWidget {
+  final String text;
 
-                const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionLabel('Price (\$)'),
-                      const SizedBox(height: 8),
-                      _Field(controller: _priceCtrl, hint: '0.00',
-                        inputType: TextInputType.number,
-                        validator: (v) => v!.isEmpty ? 'Required' : null),
-                    ],
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionLabel('Original Price'),
-                      const SizedBox(height: 8),
-                      _Field(controller: _origPriceCtrl, hint: '0.00',
-                        inputType: TextInputType.number),
-                    ],
-                  )),
-                ]),
+  const _ImageBadge({
+    required this.text,
+  });
 
-                const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionLabel('Stock'),
-                      const SizedBox(height: 8),
-                      _Field(controller: _stockCtrl, hint: '0',
-                        inputType: TextInputType.number),
-                    ],
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionLabel('Discount %'),
-                      const SizedBox(height: 8),
-                      _Field(controller: _discountCtrl, hint: '0',
-                        inputType: TextInputType.number),
-                    ],
-                  )),
-                ]),
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 6,
+      left: 6,
+      child: _SmallImageLabel(text: text),
+    );
+  }
+}
 
-                const SizedBox(height: 24),
-                const _SectionLabel('Settings'),
-                const SizedBox(height: 10),
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border)),
-                  child: Column(children: [
-                    _SettingToggle(
-                      icon: Icons.check_circle_rounded, label: 'Active',
-                      subtitle: 'Visible to customers',
-                      value: _isActive, color: AppColors.accentGreen,
-                      onChanged: (v) => setState(() => _isActive = v),
-                      showDivider: true),
-                    _SettingToggle(
-                      icon: Icons.star_rounded, label: 'Featured',
-                      subtitle: 'Show in featured section',
-                      value: _isFeatured, color: AppColors.primary,
-                      onChanged: (v) => setState(() => _isFeatured = v),
-                      showDivider: false),
-                  ]),
-                ),
+class _SmallImageLabel extends StatelessWidget {
+  final String text;
 
-                const SizedBox(height: 32),
+  const _SmallImageLabel({
+    required this.text,
+  });
 
-                // Submit button
-                BlocBuilder<ProductBloc, ProductState>(
-                  builder: (context, state) {
-                    final loading = state is ProductLoading || _uploading;
-                    return GestureDetector(
-                      onTap: loading ? null : _submit,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: double.infinity, height: 56,
-                        decoration: BoxDecoration(
-                          gradient: loading ? null : AppColors.primaryGradient,
-                          color: loading ? AppColors.card : null,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: loading ? null : [
-                            BoxShadow(color: AppColors.primary.withOpacity(0.35),
-                              blurRadius: 16, offset: const Offset(0, 6)),
-                          ],
-                        ),
-                        child: Center(
-                          child: loading
-                              ? Row(mainAxisSize: MainAxisSize.min, children: [
-                                  const SizedBox(width: 18, height: 18,
-                                    child: CircularProgressIndicator(
-                                      color: AppColors.primary, strokeWidth: 2)),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    _newImageFiles.isNotEmpty
-                                        ? 'Uploading images...'
-                                        : 'Saving...',
-                                    style: const TextStyle(fontFamily: 'Poppins',
-                                      fontSize: 14, color: AppColors.textSecondary)),
-                                ])
-                              : Row(mainAxisSize: MainAxisSize.min, children: [
-                                  Icon(_isEditing
-                                      ? Icons.save_rounded
-                                      : Icons.add_circle_rounded,
-                                    color: Colors.black, size: 20),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _isEditing ? 'Save Changes' : 'Create Product',
-                                    style: const TextStyle(fontFamily: 'Poppins',
-                                      fontSize: 16, fontWeight: FontWeight.w700,
-                                      color: Colors.black)),
-                                ]),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 40),
-              ],
-            ),
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AdminTokens.text,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      child: Text(
+        text,
+        style: AdminTokens.label(
+          color: AdminTokens.linen,
+          size: 7,
+        ),
+      ),
+    );
+  }
+}
+
+class _RemoveImageButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _RemoveImageButton({
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 6,
+      right: 6,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: 24,
+          height: 24,
+          color: AdminTokens.danger,
+          child: const Icon(
+            Icons.close_rounded,
+            color: AdminTokens.linen,
+            size: 15,
           ),
         ),
       ),
@@ -606,140 +968,133 @@ class _AdminAddProductScreenState extends State<AdminAddProductScreen> {
   }
 }
 
-// ─── Image slot widget ────────────────────────────────────────────────────────
-class _ImageSlot extends StatelessWidget {
-  final Widget child;
-  const _ImageSlot({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 100, height: 100,
-      margin: const EdgeInsets.only(right: 10),
-      child: child,
-    );
-  }
-}
-
-// ─── Source button (gallery / camera) ────────────────────────────────────────
-class _SourceBtn extends StatelessWidget {
+class _SourceOption extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color color;
   final VoidCallback onTap;
-  const _SourceBtn(
-      {required this.icon, required this.label, required this.color,
-        required this.onTap});
+
+  const _SourceOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AdminOutlineButton(
+      text: label,
+      icon: icon,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.3))),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 8),
-          Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
-            fontWeight: FontWeight.w600, color: color)),
-        ]),
-      ),
     );
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-  @override
-  Widget build(BuildContext context) => Text(text,
-    style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
-      fontWeight: FontWeight.w600, color: AppColors.textSecondary));
-}
+class _CategoryDropdown extends StatelessWidget {
+  final String value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
 
-class _Field extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final int maxLines;
-  final TextInputType inputType;
-  final String? Function(String?)? validator;
-
-  const _Field({required this.controller, required this.hint,
-    this.maxLines = 1, this.inputType = TextInputType.text,
-    this.validator});
+  const _CategoryDropdown({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller, maxLines: maxLines,
-      keyboardType: inputType, validator: validator,
-      style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
-        color: AppColors.textPrimary),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
-          color: AppColors.textHint),
-        filled: true, fillColor: AppColors.card,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.accentRed)),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.accentRed)),
+    final safeValue = items.contains(value) ? value : items.first;
+
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        border: Border.all(color: AdminTokens.text),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: safeValue,
+          isExpanded: true,
+          dropdownColor: AdminTokens.linen,
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AdminTokens.text,
+          ),
+          style: AdminTokens.bodyBold(size: 13),
+          items: items.map((item) {
+            return DropdownMenuItem<String>(
+              value: item,
+              child: Text(
+                item,
+                style: AdminTokens.bodyBold(size: 13),
+              ),
+            );
+          }).toList(),
+          onChanged: onChanged,
+        ),
       ),
     );
   }
 }
 
-class _SettingToggle extends StatelessWidget {
+class _SettingRow extends StatelessWidget {
   final IconData icon;
-  final String label, subtitle;
-  final bool value, showDivider;
-  final Color color;
+  final String label;
+  final String subtitle;
+  final bool value;
+  final Color activeColor;
   final ValueChanged<bool> onChanged;
 
-  const _SettingToggle({required this.icon, required this.label,
-    required this.subtitle, required this.value, required this.color,
-    required this.onChanged, required this.showDivider});
+  const _SettingRow({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.value,
+    required this.activeColor,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(children: [
-          Container(width: 38, height: 38,
-            decoration: BoxDecoration(color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: color, size: 18)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontFamily: 'Poppins',
-                fontSize: 13, fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary)),
-              Text(subtitle, style: const TextStyle(fontFamily: 'Poppins',
-                fontSize: 11, color: AppColors.textSecondary)),
-            ],
-          )),
-          Switch.adaptive(value: value, onChanged: onChanged,
-            activeColor: color, inactiveThumbColor: AppColors.textHint,
-            inactiveTrackColor: AppColors.border),
-        ]),
+    final color = value ? activeColor : AdminTokens.lightGray;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: color,
+            size: 24,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: AdminTokens.label(
+                    color: AdminTokens.text,
+                    size: 10,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: AdminTokens.body(size: 12),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeColor: activeColor,
+            inactiveThumbColor: AdminTokens.lightGray,
+            inactiveTrackColor: AdminTokens.border,
+          ),
+        ],
       ),
-      if (showDivider) Container(height: 1, color: AppColors.border),
-    ]);
+    );
   }
 }

@@ -1,9 +1,11 @@
 // lib/features/splash/splash_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/constants/app_colors.dart';
+
 import '../../core/constants/app_strings.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -15,11 +17,10 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _logoScale;
-  late Animation<double> _logoOpacity;
-  late Animation<double> _textOpacity;
-  late Animation<Offset> _taglineSlide;
+  late final AnimationController _controller;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _lineWidth;
 
   @override
   void initState() {
@@ -30,38 +31,36 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _setupAnimations() {
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 2500),
+      duration: const Duration(milliseconds: 1600),
       vsync: this,
     );
 
-    _logoScale = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.5, curve: Curves.elasticOut),
-      ),
+    _fade = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
     );
 
-    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
-      ),
-    );
-
-    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.4, 0.7, curve: Curves.easeIn),
-      ),
-    );
-
-    _taglineSlide = Tween<Offset>(
-      begin: const Offset(0, 0.5),
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.5, 0.85, curve: Curves.easeOut),
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    _lineWidth = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(
+          0.35,
+          1,
+          curve: Curves.easeOutCubic,
+        ),
       ),
     );
 
@@ -69,7 +68,8 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 3000));
+    await Future.delayed(const Duration(milliseconds: 2600));
+
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -79,23 +79,31 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (session != null) {
-      // Check role — admin goes to /admin, customer goes to /home
       try {
         final profile = await Supabase.instance.client
             .from('profiles')
             .select('role')
             .eq('id', session.user.id)
             .maybeSingle();
+
         if (!mounted) return;
-        final role = profile?['role'] as String? ?? 'customer';
-        final isAdmin = role == 'admin' ||
-            session.user.email == 'mubassirnasar@gmail.com';
-        context.go(isAdmin ? '/admin' : '/home');
+
+        final role = profile?['role']?.toString() ?? 'customer';
+
+        if (role == 'admin') {
+          context.go('/admin');
+        } else {
+          context.go('/home');
+        }
       } catch (_) {
         if (!mounted) return;
         context.go('/home');
       }
-    } else if (!hasSeenOnboarding) {
+
+      return;
+    }
+
+    if (!hasSeenOnboarding) {
       context.go('/onboarding');
     } else {
       context.go('/auth/login');
@@ -110,171 +118,221 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          // Background gradient orbs
-          Positioned(
-            top: -100,
-            right: -100,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  AppColors.primary.withOpacity(0.15),
-                  Colors.transparent,
-                ]),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -150,
-            left: -100,
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  AppColors.accent.withOpacity(0.1),
-                  Colors.transparent,
-                ]),
-              ),
-            ),
-          ),
+    const overlayStyle = SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: _SplashTokens.text,
+      systemNavigationBarIconBrightness: Brightness.light,
+    );
 
-          // Main content
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // ── Real Logo ─────────────────────────────────────────────
-                AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, child) {
-                    return FadeTransition(
-                      opacity: _logoOpacity,
-                      child: ScaleTransition(scale: _logoScale, child: child),
-                    );
-                  },
-                  child: Container(
-                    width: 130,
-                    height: 130,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(32),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.5),
-                          blurRadius: 48,
-                          spreadRadius: 12,
-                        ),
-                      ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: Scaffold(
+        backgroundColor: _SplashTokens.linen,
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: _SplashTokens.pageGradient,
+          ),
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final height = constraints.maxHeight;
+
+                final bool compact = height < 720;
+                final double horizontalPadding = compact ? 30 : 36;
+                final double topGap =
+                (height * 0.16).clamp(48.0, 120.0).toDouble();
+                final double titleSize = compact ? 39 : 48;
+                final double taglineSize = compact ? 12 : 14;
+                final double logoSize = compact ? 46 : 52;
+                final double bottomSpace = compact ? 22 : 34;
+
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: height,
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(32),
-                      child: Image.asset(
-                        'assets/icons/athimartlogo.png',
-                        fit: BoxFit.cover,
-                        // Fallback if asset not found
-                        errorBuilder: (_, __, ___) => Container(
-                          decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
-                            borderRadius: BorderRadius.circular(32),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: horizontalPadding,
+                      ),
+                      child: FadeTransition(
+                        opacity: _fade,
+                        child: SlideTransition(
+                          position: _slide,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 26),
+
+                              Text(
+                                'ATHIMART',
+                                style: _SplashTokens.label(
+                                  color: _SplashTokens.text,
+                                  size: 11,
+                                ),
+                              ),
+
+                              SizedBox(height: topGap),
+
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'WHERE\nTECHNOLOGY\nMEETS\nLIFESTYLE',
+                                  style: _SplashTokens.displayLarge(
+                                    size: titleSize,
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 18),
+
+                              AnimatedBuilder(
+                                animation: _lineWidth,
+                                builder: (context, child) {
+                                  return FractionallySizedBox(
+                                    widthFactor: _lineWidth.value,
+                                    alignment: Alignment.centerLeft,
+                                    child: child,
+                                  );
+                                },
+                                child: Container(
+                                  height: 1.2,
+                                  color: _SplashTokens.text,
+                                ),
+                              ),
+
+                              const SizedBox(height: 18),
+
+                              Text(
+                                AppStrings.appTagline,
+                                style: _SplashTokens.body(
+                                  size: taglineSize,
+                                ),
+                              ),
+
+                              SizedBox(height: compact ? 30 : 42),
+
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: logoSize,
+                                    height: logoSize,
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: _SplashTokens.text,
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'A',
+                                        style: _SplashTokens.displayMedium(
+                                          size: compact ? 25 : 29,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      AppStrings.poweredBy.toUpperCase(),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: _SplashTokens.label(size: 9),
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              SizedBox(height: bottomSpace),
+                            ],
                           ),
-                          child: const Center(
-                            child: Text('A',
-                              style: TextStyle(
-                                fontFamily: 'PlayfairDisplay',
-                                fontSize: 64,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                              )),
-                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 32),
-
-                // App Name
-                AnimatedBuilder(
-                  animation: _textOpacity,
-                  builder: (context, child) =>
-                      FadeTransition(opacity: _textOpacity, child: child),
-                  child: ShaderMask(
-                    shaderCallback: (bounds) =>
-                        AppColors.primaryGradient.createShader(bounds),
-                    child: const Text(
-                      AppStrings.appName,
-                      style: TextStyle(
-                        fontFamily: 'PlayfairDisplay',
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 3,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Tagline
-                AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, child) => FadeTransition(
-                    opacity: _textOpacity,
-                    child: SlideTransition(position: _taglineSlide, child: child),
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 40),
-                    child: Text(
-                      AppStrings.appTagline,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                        letterSpacing: 0.5,
-                        height: 1.6,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
-
-          // Bottom powered by
-          Positioned(
-            bottom: 48,
-            left: 0,
-            right: 0,
-            child: AnimatedBuilder(
-              animation: _textOpacity,
-              builder: (context, child) =>
-                  FadeTransition(opacity: _textOpacity, child: child),
-              child: Column(children: [
-                Container(width: 40, height: 1, color: AppColors.border),
-                const SizedBox(height: 12),
-                const Text(
-                  AppStrings.poweredBy,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: AppColors.textHint,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ]),
-            ),
-          ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _SplashTokens {
+  _SplashTokens._();
+
+  static const Color linen = Color(0xFFF2EDE7);
+  static const Color softLinen = Color(0xFFF7F2EC);
+  static const Color warmLinen = Color(0xFFEEE8E1);
+  static const Color text = Color(0xFF171717);
+  static const Color darkGray = Color(0xFF555555);
+  static const Color lightGray = Color(0xFF888888);
+
+  static const LinearGradient pageGradient = LinearGradient(
+    colors: [
+      softLinen,
+      linen,
+      warmLinen,
+    ],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static TextStyle displayLarge({
+    Color color = text,
+    double size = 44,
+  }) {
+    return GoogleFonts.oswald(
+      fontSize: size,
+      fontWeight: FontWeight.w300,
+      color: color,
+      letterSpacing: 2.3,
+      height: 1.05,
+    );
+  }
+
+  static TextStyle displayMedium({
+    Color color = text,
+    double size = 28,
+  }) {
+    return GoogleFonts.oswald(
+      fontSize: size,
+      fontWeight: FontWeight.w300,
+      color: color,
+      letterSpacing: 1.5,
+      height: 1.1,
+    );
+  }
+
+  static TextStyle label({
+    Color color = lightGray,
+    double size = 10,
+  }) {
+    return GoogleFonts.poppins(
+      fontSize: size,
+      fontWeight: FontWeight.w600,
+      color: color,
+      letterSpacing: 1.6,
+    );
+  }
+
+  static TextStyle body({
+    Color color = darkGray,
+    double size = 13,
+  }) {
+    return GoogleFonts.poppins(
+      fontSize: size,
+      fontWeight: FontWeight.w400,
+      color: color,
+      height: 1.6,
     );
   }
 }
