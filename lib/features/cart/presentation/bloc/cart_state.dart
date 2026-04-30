@@ -1,19 +1,55 @@
 // lib/features/cart/presentation/bloc/cart_state.dart
-import 'package:equatable/equatable.dart';
-import '../../data/cart_item.dart';
+import 'package:athimart/core/services/market_preference_service.dart';
+import 'package:athimart/features/cart/data/cart_item.dart';
 
-class CartState extends Equatable {
+class CartState {
   final List<CartItem> items;
-  final String? lastAddedName; // for snackbar feedback
 
-  const CartState({this.items = const [], this.lastAddedName});
+  const CartState({
+    required this.items,
+  });
 
-  int get totalItems => items.fold(0, (sum, item) => sum + item.quantity);
+  factory CartState.empty() {
+    return const CartState(items: []);
+  }
 
-  double get totalPrice => items.fold(0.0, (sum, item) => sum + item.totalPrice);
+  int get totalItems {
+    return items.fold<int>(0, (sum, item) => sum + item.quantity);
+  }
 
-  bool containsId(String id) => items.any((e) => e.id == id);
+  double get subtotal {
+    return items.fold<double>(0, (sum, item) => sum + item.lineTotal);
+  }
 
-  @override
-  List<Object?> get props => [items, lastAddedName];
+  double get deliveryFee {
+    if (items.isEmpty) return 0;
+
+    final country = MarketPreferenceService.customerCountry;
+
+    return subtotal >= country.freeDeliveryFrom ? 0 : country.deliveryFee;
+  }
+
+  double get total {
+    return subtotal + deliveryFee;
+  }
+
+  bool containsId(String id) {
+    return items.any((item) => item.id == id);
+  }
+
+  int quantityOf(String id) {
+    for (final item in items) {
+      if (item.id == id) return item.quantity;
+    }
+
+    return 0;
+  }
+
+  CartState copyWith({
+    List<CartItem>? items,
+  }) {
+    return CartState(
+      items: List<CartItem>.unmodifiable(items ?? this.items),
+    );
+  }
 }

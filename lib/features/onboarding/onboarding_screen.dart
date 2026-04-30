@@ -1,12 +1,12 @@
 // lib/features/onboarding/onboarding_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
-import '../../core/constants/app_strings.dart';
+import 'package:athimart/core/constants/app_strings.dart';
+import 'package:athimart/core/constants/market_config.dart';
+import 'package:athimart/core/services/market_preference_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -16,40 +16,48 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final PageController _pageController = PageController();
-  int _currentPage = 0;
+  final PageController _controller = PageController();
 
-  final List<_OnboardingData> _pages = [
-    _OnboardingData(
-      label: 'TECH',
-      title: AppStrings.onboardingTitles[0],
-      subtitle: AppStrings.onboardingSubtitles[0],
-      icon: Icons.smart_toy_outlined,
-      heroText: 'AI\nGADGETS',
-      imageUrl:
-      'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=85',
-    ),
-    _OnboardingData(
-      label: 'ESSENCE',
-      title: AppStrings.onboardingTitles[1],
-      subtitle: AppStrings.onboardingSubtitles[1],
-      icon: Icons.spa_outlined,
-      heroText: 'NATURAL\nESSENCES',
-      imageUrl:
-      'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=1400&q=85',
-    ),
-    _OnboardingData(
-      label: 'LIFESTYLE',
-      title: AppStrings.onboardingTitles[2],
-      subtitle: AppStrings.onboardingSubtitles[2],
-      icon: Icons.style_outlined,
-      heroText: 'GLOBAL\nSTYLE',
-      imageUrl:
-      'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1400&q=85',
-    ),
-  ];
+  int _page = 0;
+  String _selectedCountryCode = 'LK';
+  String _selectedCurrencyCode = 'LKR';
 
-  Future<void> _finishOnboarding() async {
+  MarketCountry get _selectedCountry {
+    return MarketConfig.countryByCode(_selectedCountryCode);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _selectCountry(String countryCode) {
+    final country = MarketConfig.countryByCode(countryCode);
+
+    setState(() {
+      _selectedCountryCode = country.code;
+      _selectedCurrencyCode = country.defaultCurrency;
+    });
+
+    _controller.nextPage(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _selectCurrency(String currencyCode) {
+    setState(() {
+      _selectedCurrencyCode = currencyCode;
+    });
+  }
+
+  Future<void> _finish() async {
+    await MarketPreferenceService.saveCustomerMarket(
+      countryCode: _selectedCountryCode,
+      currencyCode: _selectedCurrencyCode,
+    );
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('has_seen_onboarding', true);
 
@@ -58,139 +66,72 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     context.go('/auth/login');
   }
 
-  void _nextPage() {
-    if (_currentPage == _pages.length - 1) {
-      _finishOnboarding();
+  void _continue() {
+    if (_page == 0) {
+      _controller.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
       return;
     }
 
-    _pageController.nextPage(
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOutCubic,
-    );
+    _finish();
   }
-
-  void _skip() {
-    _finishOnboarding();
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  bool get _isLastPage => _currentPage == _pages.length - 1;
 
   @override
   Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: _OnboardingTokens.text,
-        systemNavigationBarIconBrightness: Brightness.light,
-      ),
-      child: Scaffold(
-        backgroundColor: _OnboardingTokens.linen,
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: _OnboardingTokens.pageGradient,
-          ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(26, 18, 26, 0),
-                  child: Row(
-                    children: [
-                      Text(
-                        'ATHIMART',
-                        style: _OnboardingTokens.label(
-                          color: _OnboardingTokens.text,
-                          size: 11,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (!_isLastPage)
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _skip,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 8,
-                            ),
-                            child: Text(
-                              'SKIP',
-                              style: _OnboardingTokens.label(
-                                color: _OnboardingTokens.text,
-                                size: 10,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+    return Scaffold(
+      backgroundColor: _OnboardingTokens.linen,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: _OnboardingTokens.pageGradient,
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: PageView(
+                  controller: _controller,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (index) {
+                    setState(() {
+                      _page = index;
+                    });
+                  },
+                  children: [
+                    _CountryPage(
+                      selectedCountryCode: _selectedCountryCode,
+                      onSelected: _selectCountry,
+                    ),
+                    _CurrencyPage(
+                      country: _selectedCountry,
+                      selectedCurrencyCode: _selectedCurrencyCode,
+                      onSelected: _selectCurrency,
+                    ),
+                  ],
                 ),
-
-                Expanded(
-                  child: PageView.builder(
-                    controller: _pageController,
-                    itemCount: _pages.length,
-                    onPageChanged: (index) {
-                      setState(() {
-                        _currentPage = index;
-                      });
-                    },
-                    itemBuilder: (context, index) {
-                      return _OnboardingPage(
-                        data: _pages[index],
-                        pageNumber: index + 1,
-                        totalPages: _pages.length,
-                      );
-                    },
-                  ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 10, 24, 26),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _Dot(active: _page == 0),
+                        const SizedBox(width: 8),
+                        _Dot(active: _page == 1),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    _OnboardingButton(
+                      label: _page == 0 ? 'CONTINUE' : 'START SHOPPING',
+                      onTap: _continue,
+                    ),
+                  ],
                 ),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(26, 0, 26, 26),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          SmoothPageIndicator(
-                            controller: _pageController,
-                            count: _pages.length,
-                            effect: const ExpandingDotsEffect(
-                              activeDotColor: _OnboardingTokens.text,
-                              dotColor: _OnboardingTokens.border,
-                              dotHeight: 7,
-                              dotWidth: 7,
-                              expansionFactor: 4,
-                              spacing: 7,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            '${_currentPage + 1}/${_pages.length}',
-                            style: _OnboardingTokens.label(size: 10),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      _OnboardingButton(
-                        label: _isLastPage ? 'GET STARTED' : 'NEXT',
-                        onTap: _nextPage,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -198,201 +139,193 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-class _OnboardingPage extends StatelessWidget {
-  final _OnboardingData data;
-  final int pageNumber;
-  final int totalPages;
+class _CountryPage extends StatelessWidget {
+  final String selectedCountryCode;
+  final ValueChanged<String> onSelected;
 
-  const _OnboardingPage({
-    required this.data,
-    required this.pageNumber,
-    required this.totalPages,
+  const _CountryPage({
+    required this.selectedCountryCode,
+    required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxHeight < 620;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Header(
+            label: AppStrings.appName,
+            title: 'SELECT\nCOUNTRY',
+            subtitle:
+            'Choose your shopping country first. Products, prices and delivery options will change based on this selection.',
+          ),
+          const SizedBox(height: 36),
+          ...MarketConfig.countries.map((country) {
+            return _SelectionCard(
+              title: '${country.flag} ${country.name}',
+              subtitle: country.code == 'LK'
+                  ? 'Shop Sri Lankan products in LKR or USD.'
+                  : 'Shop Maldives products in MVR or USD.',
+              selected: selectedCountryCode == country.code,
+              onTap: () => onSelected(country.code),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
 
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(26, 22, 26, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                data.label,
-                style: _OnboardingTokens.label(size: 10),
-              ),
+class _CurrencyPage extends StatelessWidget {
+  final MarketCountry country;
+  final String selectedCurrencyCode;
+  final ValueChanged<String> onSelected;
 
-              const SizedBox(height: 14),
+  const _CurrencyPage({
+    required this.country,
+    required this.selectedCurrencyCode,
+    required this.onSelected,
+  });
 
-              Container(
-                height: 1.2,
-                width: double.infinity,
-                color: _OnboardingTokens.text,
-              ),
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Header(
+            label: '${country.flag} ${country.name}',
+            title: 'SELECT\nCURRENCY',
+            subtitle: 'Choose how you want prices to appear in the app.',
+          ),
+          const SizedBox(height: 36),
+          ...country.allowedCurrencies.map((code) {
+            final currency = MarketConfig.currencyByCode(code);
 
-              const SizedBox(height: 22),
+            return _SelectionCard(
+              title: '${currency.symbol} ${currency.code}',
+              subtitle: currency.name,
+              selected: selectedCurrencyCode == currency.code,
+              onTap: () => onSelected(currency.code),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
 
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: _OnboardingTokens.white.withValues(alpha: 0.58),
-                    border: Border.all(
-                      color: _OnboardingTokens.border,
-                    ),
-                  ),
-                  child: Stack(
+class _Header extends StatelessWidget {
+  final String label;
+  final String title;
+  final String subtitle;
+
+  const _Header({
+    required this.label,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: _OnboardingTokens.label(),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          title,
+          style: _OnboardingTokens.displayLarge(size: 54),
+        ),
+        const SizedBox(height: 18),
+        Container(
+          height: 1.2,
+          color: _OnboardingTokens.text,
+        ),
+        const SizedBox(height: 18),
+        Text(
+          subtitle,
+          style: _OnboardingTokens.body(size: 14),
+        ),
+      ],
+    );
+  }
+}
+
+class _SelectionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SelectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final background =
+    selected ? _OnboardingTokens.text : _OnboardingTokens.white;
+    final foreground =
+    selected ? _OnboardingTokens.linen : _OnboardingTokens.text;
+    final secondary =
+    selected ? _OnboardingTokens.border : _OnboardingTokens.darkGray;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Material(
+        color: background.withValues(alpha: selected ? 1 : 0.66),
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              border: Border.all(color: _OnboardingTokens.text),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Positioned.fill(
-                        child: Image.network(
-                          data.imageUrl,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-
-                            return Container(
-                              color: _OnboardingTokens.card,
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                  color: _OnboardingTokens.text,
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            );
-                          },
-                          errorBuilder: (_, __, ___) {
-                            return Container(
-                              color: _OnboardingTokens.card,
-                              child: Center(
-                                child: Icon(
-                                  data.icon,
-                                  color: _OnboardingTokens.text,
-                                  size: 72,
-                                ),
-                              ),
-                            );
-                          },
+                      Text(
+                        title.toUpperCase(),
+                        style: _OnboardingTokens.bodyBold(
+                          color: foreground,
+                          size: 13,
                         ),
                       ),
-
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.black.withValues(alpha: 0.08),
-                                Colors.black.withValues(alpha: 0.12),
-                                Colors.black.withValues(alpha: 0.60),
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      Positioned(
-                        left: 22,
-                        right: 22,
-                        top: 24,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 52,
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: _OnboardingTokens.linen
-                                    .withValues(alpha: 0.92),
-                                border: Border.all(
-                                  color: _OnboardingTokens.text,
-                                  width: 1.2,
-                                ),
-                              ),
-                              child: Icon(
-                                data.icon,
-                                color: _OnboardingTokens.text,
-                                size: 25,
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 7,
-                              ),
-                              color: _OnboardingTokens.linen
-                                  .withValues(alpha: 0.92),
-                              child: Text(
-                                '$pageNumber/$totalPages',
-                                style: _OnboardingTokens.label(
-                                  color: _OnboardingTokens.text,
-                                  size: 9,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      Positioned(
-                        left: 22,
-                        right: 22,
-                        bottom: compact ? 20 : 26,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              data.heroText,
-                              style: _OnboardingTokens.displayLarge(
-                                color: _OnboardingTokens.linen,
-                                size: compact ? 38 : 45,
-                              ),
-                            ),
-
-                            const SizedBox(height: 15),
-
-                            Container(
-                              height: 1.2,
-                              width: double.infinity,
-                              color: _OnboardingTokens.linen,
-                            ),
-
-                            const SizedBox(height: 15),
-
-                            Text(
-                              data.title,
-                              style: _OnboardingTokens.bodyBold(
-                                color: _OnboardingTokens.linen,
-                                size: 15,
-                              ),
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            Text(
-                              data.subtitle,
-                              maxLines: compact ? 2 : 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: _OnboardingTokens.body(
-                                color: _OnboardingTokens.linen
-                                    .withValues(alpha: 0.82),
-                                size: 13,
-                              ),
-                            ),
-                          ],
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: _OnboardingTokens.body(
+                          color: secondary,
+                          size: 12,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
+                  color: foreground,
+                ),
+              ],
+            ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -416,23 +349,12 @@ class _OnboardingButton extends StatelessWidget {
           height: 54,
           width: double.infinity,
           child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: _OnboardingTokens.label(
-                    color: _OnboardingTokens.linen,
-                    size: 11,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Icon(
-                  Icons.arrow_forward_rounded,
-                  color: _OnboardingTokens.linen,
-                  size: 18,
-                ),
-              ],
+            child: Text(
+              label,
+              style: _OnboardingTokens.label(
+                color: _OnboardingTokens.linen,
+                size: 11,
+              ),
             ),
           ),
         ),
@@ -441,22 +363,25 @@ class _OnboardingButton extends StatelessWidget {
   }
 }
 
-class _OnboardingData {
-  final String label;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final String heroText;
-  final String imageUrl;
+class _Dot extends StatelessWidget {
+  final bool active;
 
-  const _OnboardingData({
-    required this.label,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.heroText,
-    required this.imageUrl,
+  const _Dot({
+    required this.active,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      width: active ? 28 : 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: active ? _OnboardingTokens.text : _OnboardingTokens.border,
+        borderRadius: BorderRadius.circular(99),
+      ),
+    );
+  }
 }
 
 class _OnboardingTokens {
@@ -470,7 +395,6 @@ class _OnboardingTokens {
   static const Color lightGray = Color(0xFF888888);
   static const Color border = Color(0xFFE0D8CE);
   static const Color white = Color(0xFFFFFFFF);
-  static const Color card = Color(0xFFEDE8E2);
 
   static const LinearGradient pageGradient = LinearGradient(
     colors: [

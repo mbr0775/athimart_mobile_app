@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'core/constants/app_strings.dart';
-import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'core/services/market_preference_service.dart';
+import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/cart/presentation/bloc/cart_bloc.dart';
+import 'features/cart/presentation/bloc/cart_event.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,8 +24,9 @@ Future<void> main() async {
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF0A0A0F),
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Color(0xFF171717),
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
@@ -32,6 +36,8 @@ Future<void> main() async {
     anonKey: AppStrings.supabaseAnonKey,
     debug: false,
   );
+
+  await MarketPreferenceService.load();
 
   runApp(const AthimartApp());
 }
@@ -46,9 +52,8 @@ class AthimartApp extends StatelessWidget {
         BlocProvider<AuthBloc>(
           create: (_) => AuthBloc()..add(const AuthCheckStatus()),
         ),
-        // ✅ CartBloc — global so badge updates everywhere instantly
         BlocProvider<CartBloc>(
-          create: (_) => CartBloc(),
+          create: (_) => CartBloc()..add(const CartLoadRequested()),
         ),
       ],
       child: MaterialApp.router(

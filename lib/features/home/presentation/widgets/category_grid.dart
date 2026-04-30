@@ -1,7 +1,9 @@
 // lib/features/home/presentation/widgets/category_grid.dart
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/market_config.dart';
 import '../../../../core/constants/product_taxonomy.dart';
+import '../../../../core/services/market_preference_service.dart';
 import '../theme/home_tokens.dart';
 import 'home_section_header.dart';
 
@@ -21,14 +23,19 @@ class CategoryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categories = ProductTaxonomy.categories;
+    final countryCode = MarketPreferenceService.customerCountryCode;
+    final country = MarketConfig.countryByCode(countryCode);
+    final categories = MarketConfig.allowedCategories(
+      countryCode: countryCode,
+      categories: ProductTaxonomy.categories,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const HomeSectionHeader(
+        HomeSectionHeader(
           title: 'Collections',
-          subtitle: 'Shop by category',
+          subtitle: 'Shop by category in ${country.name}',
           actionLabel: 'See all',
         ),
         const SizedBox(height: 18),

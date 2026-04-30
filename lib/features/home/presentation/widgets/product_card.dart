@@ -1,262 +1,180 @@
 // lib/features/home/presentation/widgets/product_card.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../cart/data/cart_item.dart';
-import '../../../cart/presentation/bloc/cart_bloc.dart';
-import '../../../cart/presentation/bloc/cart_event.dart';
-import '../../../cart/presentation/bloc/cart_state.dart';
-import '../theme/home_tokens.dart';
+import 'package:athimart/core/services/market_preference_service.dart';
+import 'package:athimart/core/utils/money_formatter.dart';
+import 'package:athimart/features/home/presentation/theme/home_tokens.dart';
 
 class ProductCard extends StatelessWidget {
   final Map<String, dynamic> product;
   final double? width;
   final bool compact;
+  final VoidCallback? onTap;
 
   const ProductCard({
     super.key,
     required this.product,
     this.width,
     this.compact = false,
+    this.onTap,
   });
 
-  String get id {
-    return product['id']?.toString() ??
-        product['name']?.toString() ??
-        DateTime.now().microsecondsSinceEpoch.toString();
+  String _stringValue(String key, {String fallback = ''}) {
+    final value = product[key];
+    if (value == null) return fallback;
+
+    final text = value.toString().trim();
+    return text.isEmpty ? fallback : text;
   }
 
-  String get name {
-    return product['name']?.toString() ?? 'Product';
-  }
+  int _intValue(String key, {int fallback = 0}) {
+    final value = product[key];
 
-  String get companyName {
-    return product['company_name']?.toString() ?? 'Athimart';
-  }
-
-  String get category {
-    return product['category']?.toString() ?? 'General';
-  }
-
-  String get emoji {
-    return product['emoji']?.toString() ?? '📦';
-  }
-
-  double get price {
-    final value = product['price'];
-
-    if (value is num) return value.toDouble();
-
-    return double.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  double get originalPrice {
-    final value = product['original_price'] ?? product['originalPrice'];
-
-    if (value is num) return value.toDouble();
-
-    return double.tryParse(value?.toString() ?? '') ?? price;
-  }
-
-  int get discountPercent {
-    final value = product['discount_percent'] ?? product['discountPercent'];
-
+    if (value is int) return value;
     if (value is num) return value.toInt();
 
-    return int.tryParse(value?.toString() ?? '') ?? 0;
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
   }
 
-  String? get imageUrl {
-    final raw = product['image_urls'] ?? product['imageUrls'];
+  String? get _imageUrl {
+    final rawImages = product['image_urls'];
 
-    if (raw is List && raw.isNotEmpty) {
-      return raw.first.toString();
+    if (rawImages is List && rawImages.isNotEmpty) {
+      final first = rawImages.first?.toString().trim();
+      if (first != null && first.isNotEmpty) return first;
     }
 
-    final single = product['image_url'] ?? product['imageUrl'];
+    final singleImage = product['image_url'] ?? product['imageUrl'];
+    final text = singleImage?.toString().trim();
 
-    if (single != null && single.toString().isNotEmpty) {
-      return single.toString();
-    }
-
-    return null;
-  }
-
-  bool get hasDiscount {
-    return discountPercent > 0 || originalPrice > price;
-  }
-
-  void _addToCart(BuildContext context) {
-    context.read<CartBloc>().add(
-      CartAddItem(
-        CartItem(
-          id: id,
-          name: name,
-          emoji: emoji,
-          category: category,
-          price: price,
-          originalPrice: originalPrice,
-          discountPercent: discountPercent,
-        ),
-      ),
-    );
-
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$name added to cart',
-          style: const TextStyle(color: HomeTokens.linen),
-        ),
-        backgroundColor: HomeTokens.text,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (text == null || text.isEmpty) return null;
+    return text;
   }
 
   @override
   Widget build(BuildContext context) {
-    final productImage = imageUrl;
-    final imageHeight = compact ? 138.0 : 172.0;
+    final currencyCode = MarketPreferenceService.customerCurrencyCode;
 
-    return Container(
+    final name = _stringValue('name', fallback: 'Product');
+    final companyName = _stringValue('company_name', fallback: 'Athimart');
+    final category = _stringValue('category', fallback: 'General');
+    final emoji = _stringValue('emoji', fallback: '📦');
+
+    final price = MoneyFormatter.productPrice(product, currencyCode);
+    final originalPrice = MoneyFormatter.productOriginalPrice(
+      product,
+      currencyCode,
+    );
+
+    final discountPercent = _intValue('discount_percent');
+    final hasDiscount = discountPercent > 0 && originalPrice > price;
+
+    final imageUrl = _imageUrl;
+
+    final card = Container(
       width: width,
-      color: HomeTokens.white,
+      decoration: BoxDecoration(
+        color: HomeTokens.white.withValues(alpha: 0.72),
+        border: Border.all(color: HomeTokens.border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              Container(
-                height: imageHeight,
-                width: double.infinity,
-                color: HomeTokens.card,
-                child: productImage == null
-                    ? Center(
+          Container(
+            height: compact ? 132 : 152,
+            width: double.infinity,
+            color: HomeTokens.card,
+            child: imageUrl == null
+                ? Center(
+              child: Text(
+                emoji,
+                style: TextStyle(fontSize: compact ? 40 : 48),
+              ),
+            )
+                : Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) {
+                return Center(
                   child: Text(
                     emoji,
-                    style: const TextStyle(fontSize: 52),
+                    style: TextStyle(fontSize: compact ? 40 : 48),
                   ),
-                )
-                    : Image.network(
-                  productImage,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) {
-                    return Center(
-                      child: Text(
-                        emoji,
-                        style: const TextStyle(fontSize: 52),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              if (hasDiscount)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    color: HomeTokens.text,
-                    child: Text(
-                      '-$discountPercent%',
-                      style: HomeTokens.label(
-                        color: HomeTokens.linen,
-                        size: 9,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+                );
+              },
+            ),
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(11),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    companyName.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: HomeTokens.label(size: 9),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: HomeTokens.bodyBold(size: compact ? 11 : 12),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    category,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: HomeTokens.body(
-                      size: 10,
-                      color: HomeTokens.lightGray,
+          Padding(
+            padding: EdgeInsets.all(compact ? 10 : 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: HomeTokens.label(size: 8),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: HomeTokens.bodyBold(size: compact ? 12 : 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  companyName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: HomeTokens.body(size: 10),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        MoneyFormatter.format(price, currencyCode),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: HomeTokens.price(size: compact ? 13 : 15),
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (hasDiscount)
-                              Text(
-                                '\$${originalPrice.toStringAsFixed(2)}',
-                                style: HomeTokens.body(
-                                  size: 10,
-                                  color: HomeTokens.lightGray,
-                                ).copyWith(
-                                  decoration: TextDecoration.lineThrough,
-                                ),
-                              ),
-                            Text(
-                              '\$${price.toStringAsFixed(2)}',
-                              style: HomeTokens.price(size: compact ? 13 : 15),
-                            ),
-                          ],
+                    if (hasDiscount)
+                      Text(
+                        '-$discountPercent%',
+                        style: HomeTokens.label(
+                          color: HomeTokens.sale,
+                          size: 8,
                         ),
                       ),
-                      BlocBuilder<CartBloc, CartState>(
-                        builder: (context, cartState) {
-                          final inCart = cartState.containsId(id);
-
-                          return GestureDetector(
-                            onTap: inCart ? null : () => _addToCart(context),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              width: 34,
-                              height: 34,
-                              color: inCart
-                                  ? HomeTokens.success
-                                  : HomeTokens.text,
-                              child: Icon(
-                                inCart
-                                    ? Icons.check_rounded
-                                    : Icons.add_rounded,
-                                color: HomeTokens.linen,
-                                size: 18,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                  ],
+                ),
+                if (hasDiscount) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    MoneyFormatter.format(originalPrice, currencyCode),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: HomeTokens.body(size: 10).copyWith(
+                      decoration: TextDecoration.lineThrough,
+                    ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+
+    if (onTap == null) return card;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: card,
       ),
     );
   }

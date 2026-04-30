@@ -1,7 +1,9 @@
 // lib/features/home/presentation/screens/shop_screen.dart
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/market_config.dart';
 import '../../../../core/constants/product_taxonomy.dart';
+import '../../../../core/services/market_preference_service.dart';
 import '../../../../core/services/product_service.dart';
 import '../theme/home_tokens.dart';
 import '../widgets/product_card.dart';
@@ -26,9 +28,14 @@ class _ShopScreenState extends State<ShopScreen> {
   List<Map<String, dynamic>> _filteredProducts = [];
 
   List<String> get _categories {
+    final countryCode = MarketPreferenceService.customerCountryCode;
+
     return [
       'All',
-      ...ProductTaxonomy.categories,
+      ...MarketConfig.allowedCategories(
+        countryCode: countryCode,
+        categories: ProductTaxonomy.categories,
+      ),
     ];
   }
 
@@ -111,20 +118,29 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   void _selectCategory(String category) {
-    _selectedCategory = category;
-    _selectedSubCategory = 'All';
-    _selectedBrand = 'All Brands';
+    setState(() {
+      _selectedCategory = category;
+      _selectedSubCategory = 'All';
+      _selectedBrand = 'All Brands';
+    });
+
     _applyFilters();
   }
 
   void _selectSubCategory(String subCategory) {
-    _selectedSubCategory = subCategory;
-    _selectedBrand = 'All Brands';
+    setState(() {
+      _selectedSubCategory = subCategory;
+      _selectedBrand = 'All Brands';
+    });
+
     _applyFilters();
   }
 
   void _selectBrand(String brand) {
-    _selectedBrand = brand;
+    setState(() {
+      _selectedBrand = brand;
+    });
+
     _applyFilters();
   }
 
@@ -168,6 +184,9 @@ class _ShopScreenState extends State<ShopScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final country = MarketPreferenceService.customerCountry;
+    final currency = MarketPreferenceService.customerCurrency;
+
     return Scaffold(
       backgroundColor: HomeTokens.linen,
       body: Container(
@@ -199,7 +218,7 @@ class _ShopScreenState extends State<ShopScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'SHOP\nPRODUCTS',
+                          'SHOP\n${country.name.toUpperCase()}',
                           style: HomeTokens.displayLarge().copyWith(
                             fontSize: 46,
                             letterSpacing: 2.4,
@@ -213,7 +232,7 @@ class _ShopScreenState extends State<ShopScreen> {
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          'Filter by category, product type and company brand.',
+                          '${country.flag} Products for ${country.name}. Prices shown in ${currency.code}.',
                           style: HomeTokens.body(size: 14),
                         ),
                         const SizedBox(height: 28),
@@ -226,178 +245,73 @@ class _ShopScreenState extends State<ShopScreen> {
                     ),
                   ),
                 ),
-
                 SliverToBoxAdapter(
-                  child: _FilterSection(
+                  child: _FilterList(
                     title: 'Category',
                     items: _categories,
-                    selectedItem: _selectedCategory,
+                    selected: _selectedCategory,
                     onSelected: _selectCategory,
                   ),
                 ),
-
-                if (_selectedCategory != 'All') ...[
-                  const SliverToBoxAdapter(child: SizedBox(height: 18)),
-                  SliverToBoxAdapter(
-                    child: _FilterSection(
-                      title: 'Product Type',
-                      items: _subCategories,
-                      selectedItem: _selectedSubCategory,
-                      onSelected: _selectSubCategory,
-                    ),
-                  ),
-                ],
-
-                if (_brands.length > 1) ...[
-                  const SliverToBoxAdapter(child: SizedBox(height: 18)),
-                  SliverToBoxAdapter(
-                    child: _FilterSection(
-                      title: 'Company / Brand',
-                      items: _brands,
-                      selectedItem: _selectedBrand,
-                      onSelected: _selectBrand,
-                    ),
-                  ),
-                ],
-
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(26, 24, 26, 16),
-                    child: Row(
-                      children: [
-                        Text(
-                          'PRODUCTS',
-                          style: HomeTokens.displayMedium().copyWith(
-                            fontSize: 30,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${_filteredProducts.length} ITEMS',
-                          style: HomeTokens.label(
-                            color: HomeTokens.text,
-                            size: 9,
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: _FilterList(
+                    title: 'Product Type',
+                    items: _subCategories,
+                    selected: _selectedSubCategory,
+                    onSelected: _selectSubCategory,
                   ),
                 ),
-
+                SliverToBoxAdapter(
+                  child: _FilterList(
+                    title: 'Brand',
+                    items: _brands,
+                    selected: _selectedBrand,
+                    onSelected: _selectBrand,
+                  ),
+                ),
                 if (_loading)
-                  const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 70, bottom: 160),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: HomeTokens.text,
-                          strokeWidth: 2,
-                        ),
+                  const SliverFillRemaining(
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: HomeTokens.text,
+                        strokeWidth: 2,
                       ),
                     ),
                   )
                 else if (_filteredProducts.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(26, 10, 26, 150),
-                      child: _EmptyShop(
-                        searchText: _searchCtrl.text,
-                      ),
-                    ),
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _EmptyShop(),
                   )
                 else
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(26, 0, 26, 110),
-                    sliver: SliverGrid(
-                      delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                          return ProductCard(
-                            product: _filteredProducts[index],
-                            compact: true,
-                          );
-                        },
-                        childCount: _filteredProducts.length,
-                      ),
+                    padding: const EdgeInsets.fromLTRB(
+                      HomeTokens.pagePadding,
+                      16,
+                      HomeTokens.pagePadding,
+                      40,
+                    ),
+                    sliver: SliverGrid.builder(
+                      itemCount: _filteredProducts.length,
                       gridDelegate:
                       const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
                         mainAxisSpacing: 12,
                         crossAxisSpacing: 12,
-                        childAspectRatio: 0.56,
+                        childAspectRatio: 0.58,
                       ),
+                      itemBuilder: (context, index) {
+                        return ProductCard(
+                          product: _filteredProducts[index],
+                          compact: true,
+                        );
+                      },
                     ),
                   ),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _FilterSection extends StatelessWidget {
-  final String title;
-  final List<String> items;
-  final String selectedItem;
-  final ValueChanged<String> onSelected;
-
-  const _FilterSection({
-    required this.title,
-    required this.items,
-    required this.selectedItem,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title.toUpperCase(),
-            style: HomeTokens.label(
-              color: HomeTokens.text,
-              size: 10,
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 40,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final item = items[index];
-                final selected = item == selectedItem;
-
-                return GestureDetector(
-                  onTap: () => onSelected(item),
-                  child: Container(
-                    height: 38,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: selected ? HomeTokens.text : Colors.transparent,
-                      border: Border.all(color: HomeTokens.text),
-                    ),
-                    child: Center(
-                      child: Text(
-                        item.toUpperCase(),
-                        style: HomeTokens.label(
-                          size: 9,
-                          color: selected ? HomeTokens.linen : HomeTokens.text,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -419,24 +333,33 @@ class _SearchField extends StatelessWidget {
       cursorColor: HomeTokens.text,
       textInputAction: TextInputAction.search,
       style: HomeTokens.displayMedium().copyWith(
-        fontSize: 26,
+        fontSize: 28,
         letterSpacing: 0.2,
       ),
       decoration: InputDecoration(
         filled: false,
         fillColor: Colors.transparent,
-        hoverColor: Colors.transparent,
-        focusColor: Colors.transparent,
-        hintText: 'Search products, brands, types...',
+        hintText: 'Search products...',
         hintStyle: HomeTokens.displayMedium(
           color: const Color(0xFFB8B8B8),
         ).copyWith(
-          fontSize: 26,
+          fontSize: 28,
           letterSpacing: 0.2,
         ),
-        suffixIcon: const Icon(
+        suffixIcon: controller.text.isEmpty
+            ? const Icon(
           Icons.search_rounded,
           color: HomeTokens.text,
+        )
+            : IconButton(
+          onPressed: () {
+            controller.clear();
+            onChanged('');
+          },
+          icon: const Icon(
+            Icons.close_rounded,
+            color: HomeTokens.text,
+          ),
         ),
         contentPadding: const EdgeInsets.only(bottom: 10),
         border: const UnderlineInputBorder(
@@ -454,49 +377,114 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-class _EmptyShop extends StatelessWidget {
-  final String searchText;
+class _FilterList extends StatelessWidget {
+  final String title;
+  final List<String> items;
+  final String selected;
+  final ValueChanged<String> onSelected;
 
-  const _EmptyShop({
-    required this.searchText,
+  const _FilterList({
+    required this.title,
+    required this.items,
+    required this.selected,
+    required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasSearch = searchText.trim().isNotEmpty;
+    if (items.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 26, 22, 26),
-      decoration: BoxDecoration(
-        color: HomeTokens.white.withValues(alpha: 0.62),
-        border: Border.all(color: HomeTokens.border),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.storefront_outlined,
-            color: HomeTokens.text,
-            size: 44,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            hasSearch ? 'NO RESULTS' : 'NO PRODUCTS',
-            textAlign: TextAlign.center,
-            style: HomeTokens.displayMedium().copyWith(
-              fontSize: 30,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SizedBox(
+        height: 74,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: HomeTokens.pagePadding,
+              ),
+              child: Text(
+                title.toUpperCase(),
+                style: HomeTokens.label(
+                  color: HomeTokens.text,
+                  size: 9,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hasSearch
-                ? 'Try another product, brand or type.'
-                : 'Products added from admin will appear here.',
-            textAlign: TextAlign.center,
-            style: HomeTokens.body(size: 13),
-          ),
-        ],
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: HomeTokens.pagePadding,
+                ),
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final active = selected == item;
+
+                  return GestureDetector(
+                    onTap: () => onSelected(item),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: active ? HomeTokens.text : Colors.transparent,
+                        border: Border.all(color: HomeTokens.text),
+                      ),
+                      child: Center(
+                        child: Text(
+                          item.toUpperCase(),
+                          style: HomeTokens.label(
+                            color:
+                            active ? HomeTokens.linen : HomeTokens.text,
+                            size: 9,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyShop extends StatelessWidget {
+  const _EmptyShop();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(34),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.storefront_outlined,
+              color: HomeTokens.text,
+              size: 58,
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'NO PRODUCTS',
+              style: HomeTokens.displayMedium().copyWith(fontSize: 34),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No products found for this country or filter.',
+              textAlign: TextAlign.center,
+              style: HomeTokens.body(size: 14),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,33 +1,36 @@
 // lib/features/cart/presentation/bloc/cart_event.dart
-import 'package:equatable/equatable.dart';
-import '../../data/cart_item.dart';
+import 'package:athimart/features/cart/data/cart_item.dart';
 
-abstract class CartEvent extends Equatable {
+abstract class CartEvent {
   const CartEvent();
-  @override
-  List<Object?> get props => [];
+}
+
+class CartLoadRequested extends CartEvent {
+  const CartLoadRequested();
 }
 
 class CartAddItem extends CartEvent {
   final CartItem item;
+
   const CartAddItem(this.item);
-  @override
-  List<Object?> get props => [item.id];
+}
+
+class CartIncrementItem extends CartEvent {
+  final String id;
+
+  const CartIncrementItem(this.id);
+}
+
+class CartDecrementItem extends CartEvent {
+  final String id;
+
+  const CartDecrementItem(this.id);
 }
 
 class CartRemoveItem extends CartEvent {
-  final String itemId;
-  const CartRemoveItem(this.itemId);
-  @override
-  List<Object?> get props => [itemId];
-}
+  final String id;
 
-class CartUpdateQuantity extends CartEvent {
-  final String itemId;
-  final int quantity;
-  const CartUpdateQuantity(this.itemId, this.quantity);
-  @override
-  List<Object?> get props => [itemId, quantity];
+  const CartRemoveItem(this.id);
 }
 
 class CartClear extends CartEvent {
